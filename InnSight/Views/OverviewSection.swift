@@ -35,7 +35,9 @@ struct OverviewSection: View {
     // MARK: - Statistics Grid
     
     private var statisticsGrid: some View {
-        HStack(spacing: 12) {
+        // alignmentGuide garantiza que ambas tarjetas crezcan al mismo alto
+        // aunque el texto de ingresos sea más largo que el de reservaciones.
+        HStack(alignment: .top, spacing: 12) {
             StatisticsCardView(
                 title: "Reservaciones",
                 value: "\(statisticsVM.totalReservations)",
@@ -43,15 +45,17 @@ struct OverviewSection: View {
                 color: AppColors.success,
                 trend: statisticsVM.reservationsTrend
             )
-            
+
             StatisticsCardView(
-                title: "Ingresos",
+                title: "Ingresos (mes)",
                 value: statisticsVM.totalRevenueFormatted,
                 icon: "dollarsign.circle.fill",
                 color: AppColors.accent,
                 trend: statisticsVM.revenueTrend
             )
         }
+        // Fuerza que ambas tarjetas tengan exactamente el mismo alto
+        .fixedSize(horizontal: false, vertical: true)
     }
     
     // MARK: - Loading State

@@ -107,10 +107,12 @@ class AnalyticsService {
     
     // MARK: - Fetch Revenue Data
     
-    /// Fetches revenue trend data for the given period and optional hotel filter
+    /// Fetches revenue trend data for the given period and optional hotel filter.
+    /// Agrupa los ingresos por la fecha de inicio de la estancia (start_date),
+    /// que es el criterio correcto para contabilizar cuándo se generó el ingreso.
     func fetchRevenueData(ownerId: UUID, period: AnalyticsPeriod, hotelId: UUID?) async throws -> [RevenueDataPoint] {
         let (startDate, _) = dateRange(for: period)
-        
+
         // Fetch owner's hotels
         let hotels: [Hotel] = try await supabase
             .from("hotels")
@@ -118,38 +120,41 @@ class AnalyticsService {
             .eq("owner_id", value: ownerId.uuidString)
             .execute()
             .value
-        
+
         var targetHotelIds: [UUID]
         if let hotelId = hotelId {
             targetHotelIds = [hotelId]
         } else {
             targetHotelIds = hotels.map { $0.id }
         }
-        
+
         guard !targetHotelIds.isEmpty else { return [] }
-        
+
         let dateFormatter = ISO8601DateFormatter()
         dateFormatter.formatOptions = [.withFullDate]
-        
+
+        // Filtramos por start_date (fecha real de estancia) en lugar de created_at
         let reservations: [AdminReservation] = try await supabase
             .from("admin_reservations_view")
             .select()
             .in("hotel_id", values: targetHotelIds.map { $0.uuidString })
-            .gte("created_at", value: dateFormatter.string(from: startDate))
+            .gte("start_date", value: dateFormatter.string(from: startDate))
             .execute()
             .value
-        
-        // Filter out cancelled reservations
-        let activeReservations = reservations.filter { $0.status != .cancelled }
-        
-        // Aggregate revenue per bucket
+
+        // Excluir canceladas y no-shows
+        let activeReservations = reservations.filter {
+            $0.status != .cancelled && $0.status != .noShow
+        }
+
+        // Agrupar ingresos por bucket usando start_date (no createdAt)
         let buckets = dateBuckets(for: period)
-        
+
         return buckets.map { bucket in
             let bucketRevenue = activeReservations
-                .filter { $0.createdAt >= bucket.start && $0.createdAt < bucket.end }
+                .filter { $0.startDate >= bucket.start && $0.startDate < bucket.end }
                 .reduce(Decimal(0)) { $0 + $1.totalPrice }
-            
+
             return RevenueDataPoint(date: bucket.start, amount: bucketRevenue, label: bucket.label)
         }
     }

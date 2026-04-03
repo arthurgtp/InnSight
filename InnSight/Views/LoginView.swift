@@ -93,6 +93,8 @@ struct LoginView: View {
                                 
                                 if showPassword {
                                     TextField("Contraseña", text: $viewModel.password)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
                                         .focused($focusedField, equals: .password)
                                         .submitLabel(.go)
                                         .foregroundColor(AppColors.textPrimary)
@@ -102,6 +104,8 @@ struct LoginView: View {
                                         }
                                 } else {
                                     SecureField("Contraseña", text: $viewModel.password)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
                                         .focused($focusedField, equals: .password)
                                         .submitLabel(.go)
                                         .foregroundColor(AppColors.textPrimary)
@@ -208,3 +212,4 @@ struct LoginView: View {
     LoginView()
         .environmentObject(AuthViewModel())
 }
+

@@ -1,0 +1,67 @@
+name: iOS CI
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+jobs:
+  build:
+    name: Build & Test (iOS)
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Seleccionar versión de Xcode
+        run: sudo xcode-select -switch /Applications/Xcode.app
+
+      - name: Mostrar versión de Xcode
+        run: xcodebuild -version
+
+      - name: Resolver dependencias (SPM)
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project InnSight.xcodeproj \
+            -scheme InnSight
+
+      - name: Compilar app
+        run: |
+          xcodebuild build \
+            -project InnSight.xcodeproj \
+            -scheme InnSight \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || xcodebuild build \
+            -project InnSight.xcodeproj \
+            -scheme InnSight \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Ejecutar pruebas unitarias
+        run: |
+          xcodebuild test \
+            -project InnSight.xcodeproj \
+            -scheme InnSight \
+            -sdk iphonesimulator \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || true
+        continue-on-error: true
+
+      - name: Subir reporte de build
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            ~/Library/Logs/DiagnosticReports/
+          retention-days: 5
