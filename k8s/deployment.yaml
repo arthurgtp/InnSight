@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: innsight-backend
+  labels:
+    app: innsight-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: innsight-backend
+  template:
+    metadata:
+      labels:
+        app: innsight-backend
+    spec:
+      containers:
+        - name: innsight-backend
+          image: innsight-backend:latest
+          imagePullPolicy: Never        # usa imagen local de Minikube
+          ports:
+            - containerPort: 5000
+          env:
+            - name: FLASK_ENV
+              value: "production"
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
