@@ -1,0 +1,6 @@
+apiVersion: v2
+name: innsight
+description: Helm chart para el backend API REST de InnSight
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
