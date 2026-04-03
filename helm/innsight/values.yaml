@@ -1,0 +1,36 @@
+# Valores por defecto del chart de InnSight
+# Se pueden sobreescribir al momento del deploy
+
+image:
+  repository: innsight-backend
+  tag: latest
+  pullPolicy: Never           # usar imagen local de Minikube
+
+replicaCount: 2
+
+service:
+  type: NodePort
+  port: 80
+  targetPort: 5000
+  nodePort: 30080
+
+resources:
+  requests:
+    memory: "64Mi"
+    cpu: "100m"
+  limits:
+    memory: "256Mi"
+    cpu: "500m"
+
+env:
+  FLASK_ENV: production
+
+probes:
+  liveness:
+    path: /api/health
+    initialDelaySeconds: 10
+    periodSeconds: 15
+  readiness:
+    path: /api/health
+    initialDelaySeconds: 5
+    periodSeconds: 10
