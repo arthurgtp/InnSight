@@ -143,6 +143,8 @@ struct RegisterView: View {
                                 
                                 if showPassword {
                                     TextField("Mínimo 6 caracteres", text: $password)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
                                         .focused($focusedField, equals: .password)
                                         .submitLabel(.next)
                                         .foregroundColor(AppColors.textPrimary)
@@ -152,6 +154,8 @@ struct RegisterView: View {
                                         }
                                 } else {
                                     SecureField("Mínimo 6 caracteres", text: $password)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
                                         .focused($focusedField, equals: .password)
                                         .submitLabel(.next)
                                         .foregroundColor(AppColors.textPrimary)
@@ -187,6 +191,8 @@ struct RegisterView: View {
                                 
                                 if showConfirmPassword {
                                     TextField("Repite tu contraseña", text: $confirmPassword)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
                                         .focused($focusedField, equals: .confirmPassword)
                                         .submitLabel(.go)
                                         .foregroundColor(AppColors.textPrimary)
@@ -196,6 +202,8 @@ struct RegisterView: View {
                                         }
                                 } else {
                                     SecureField("Repite tu contraseña", text: $confirmPassword)
+                                        .textInputAutocapitalization(.never)
+                                        .autocorrectionDisabled(true)
                                         .focused($focusedField, equals: .confirmPassword)
                                         .submitLabel(.go)
                                         .foregroundColor(AppColors.textPrimary)
@@ -334,3 +342,4 @@ struct RegisterView: View {
     RegisterView()
         .environmentObject(AuthViewModel())
 }
+

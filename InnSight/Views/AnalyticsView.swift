@@ -147,7 +147,7 @@ struct AnalyticsView: View {
     }
     
     // MARK: - Charts Section
-    
+
     private var chartsSection: some View {
         VStack(spacing: 16) {
             // Summary cards
@@ -158,7 +158,7 @@ struct AnalyticsView: View {
                     icon: "bed.double.fill",
                     color: AppColors.primary
                 )
-                
+
                 summaryCard(
                     title: "Ingresos Total",
                     value: viewModel.totalRevenueFormatted,
@@ -166,12 +166,42 @@ struct AnalyticsView: View {
                     color: AppColors.accent
                 )
             }
-            
+
             // Occupancy Chart
             OccupancyChartView(data: viewModel.occupancyData, period: selectedPeriod)
-            
+
             // Revenue Chart
             RevenueChartView(data: viewModel.revenueData, period: selectedPeriod)
+
+            // ── Predicción IA ────────────────────────────────────────────
+            predictionSection
+        }
+    }
+
+    // MARK: - Prediction Section
+
+    @ViewBuilder
+    private var predictionSection: some View {
+        if viewModel.isPredictionLoading {
+            // Skeleton / loading state
+            HStack(spacing: 12) {
+                ProgressView()
+                    .tint(AppColors.primary)
+                Text("Calculando predicción...")
+                    .font(AppFonts.bodyMedium)
+                    .foregroundColor(AppColors.textSecondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 20)
+            .background(AppColors.surface)
+            .cornerRadius(16)
+            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 2)
+
+        } else if let result = viewModel.predictionResult {
+            PredictionView(result: result)
+
+        } else {
+            PredictionInsufficientDataView()
         }
     }
     

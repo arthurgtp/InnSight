@@ -20,23 +20,26 @@ struct StatisticsCardView: View {
             Image(systemName: icon)
                 .font(.title2)
                 .foregroundColor(color)
-            
-            // Value
+
+            // Value — escala hacia abajo antes de partir el texto
             Text(value)
                 .font(AppFonts.headlineSmall)
                 .foregroundColor(AppColors.textPrimary)
-            
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+                .truncationMode(.middle)
+
             // Title
             Text(title)
                 .font(AppFonts.caption)
                 .foregroundColor(AppColors.textSecondary)
-            
+
             // Trend indicator
             if let trend = trend {
                 TrendIndicatorView(trend: trend)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 100)
+        .frame(maxWidth: .infinity, minHeight: 110)
         .padding(.vertical, 16)
         .padding(.horizontal, 8)
         .background(AppColors.surface)

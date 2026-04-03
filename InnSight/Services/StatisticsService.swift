@@ -45,22 +45,28 @@ class StatisticsService {
             totalRooms += rooms.count
         }
         
-        // Fetch reservations and calculate revenue
+        // Fetch reservations and calculate revenue — filtered to current month (by start_date)
         var totalReservations = 0
         var totalRevenue: Decimal = 0
-        
+
         if !hotelIds.isEmpty {
+            let dateFormatter = ISO8601DateFormatter()
+            dateFormatter.formatOptions = [.withFullDate]
+
             let reservations: [AdminReservation] = try await supabase
                 .from("admin_reservations_view")
                 .select()
                 .in("hotel_id", values: hotelIds.map { $0.uuidString })
+                .gte("start_date", value: dateFormatter.string(from: periodStart))
+                .lte("start_date", value: dateFormatter.string(from: periodEnd))
                 .execute()
                 .value
-            
-            totalReservations = reservations.count
-            totalRevenue = reservations
-                .filter { $0.status != .cancelled }
-                .reduce(Decimal(0)) { $0 + $1.totalPrice }
+
+            let activeReservations = reservations.filter {
+                $0.status != .cancelled && $0.status != .noShow
+            }
+            totalReservations = activeReservations.count
+            totalRevenue = activeReservations.reduce(Decimal(0)) { $0 + $1.totalPrice }
         }
         
         return DashboardStats(
@@ -121,15 +127,16 @@ class StatisticsService {
                 .from("admin_reservations_view")
                 .select()
                 .in("hotel_id", values: hotelIds.map { $0.uuidString })
-                .gte("created_at", value: dateFormatter.string(from: periodStart))
-                .lte("created_at", value: dateFormatter.string(from: periodEnd))
+                .gte("start_date", value: dateFormatter.string(from: periodStart))
+                .lte("start_date", value: dateFormatter.string(from: periodEnd))
                 .execute()
                 .value
-            
-            totalReservations = reservations.count
-            totalRevenue = reservations
-                .filter { $0.status != .cancelled }
-                .reduce(Decimal(0)) { $0 + $1.totalPrice }
+
+            let activeReservations = reservations.filter {
+                $0.status != .cancelled && $0.status != .noShow
+            }
+            totalReservations = activeReservations.count
+            totalRevenue = activeReservations.reduce(Decimal(0)) { $0 + $1.totalPrice }
         }
         
         return DashboardStats(
