@@ -182,7 +182,7 @@ struct PredictionView: View {
             if result.period == .year {
                 annualCard(period: result.nextPeriod)
             } else {
-                HStack(spacing: 12) {
+                VStack(spacing: 10) {
                     periodCard(
                         period      : result.nextPeriod,
                         seasonIndex : result.nextPeriodSeasonIndex,
@@ -210,72 +210,77 @@ struct PredictionView: View {
         }
     }
 
-    // Tarjeta para semana/mes — incluye badge estacional
+    // Tarjeta para semana/mes — layout horizontal, una por renglón
     private func periodCard(
         period      : PredictionPeriod,
         seasonIndex : Double,
         isNext      : Bool
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header: ícono + etiqueta + badge estacional + "Próximo"
-            HStack(spacing: 4) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 10))
-                    .foregroundColor(AppColors.accent)
-                Text(period.label)
-                    .font(AppFonts.labelMedium)
-                    .foregroundColor(AppColors.accent)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Spacer()
+        HStack(spacing: 16) {
+            // ── Columna izquierda: etiqueta + subtítulo + badges ─────────────
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.accent)
+                    Text(period.label)
+                        .font(AppFonts.titleMedium)
+                        .foregroundColor(AppColors.accent)
+                        .fontWeight(.bold)
+                    if isNext {
+                        Text("Próximo")
+                            .font(AppFonts.overline)
+                            .foregroundColor(AppColors.textTertiary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppColors.background)
+                            .cornerRadius(4)
+                    }
+                }
+                Text(period.subtitle)
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.textTertiary)
                 // Badge estacional
                 Text(seasonalBadge(for: seasonIndex))
                     .font(AppFonts.overline)
                     .foregroundColor(seasonalBadgeColor(for: seasonIndex))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
                     .background(seasonalBadgeColor(for: seasonIndex).opacity(0.12))
-                    .cornerRadius(4)
-                if isNext {
-                    Text("Próximo")
-                        .font(AppFonts.overline)
-                        .foregroundColor(AppColors.textTertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(AppColors.surfaceSecondary)
-                        .cornerRadius(4)
+                    .cornerRadius(6)
+            }
+
+            Spacer()
+
+            // ── Divisor ──────────────────────────────────────────────────────
+            Divider()
+                .frame(height: 52)
+                .background(AppColors.divider)
+
+            // ── Columna derecha: reservaciones + ingresos ────────────────────
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("\(period.reservations)")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundColor(AppColors.textPrimary)
+                    Text("reserv.")
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                }
+                HStack(spacing: 4) {
+                    Image(systemName: "dollarsign.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.success)
+                    Text(period.revenueFormatted)
+                        .font(AppFonts.labelMedium)
+                        .foregroundColor(AppColors.success)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
             }
-
-            Text(period.subtitle)
-                .font(AppFonts.caption)
-                .foregroundColor(AppColors.textTertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("\(period.reservations)")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(AppColors.textPrimary)
-                Text("reserv.")
-                    .font(AppFonts.caption)
-                    .foregroundColor(AppColors.textSecondary)
-            }
-
-            HStack(spacing: 4) {
-                Image(systemName: "dollarsign.circle.fill")
-                    .font(.system(size: 11))
-                    .foregroundColor(AppColors.success)
-                Text(period.revenueFormatted)
-                    .font(AppFonts.labelMedium)
-                    .foregroundColor(AppColors.success)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(16)
+        .frame(maxWidth: .infinity)
         .background(AppColors.surfaceSecondary)
         .cornerRadius(12)
         .overlay(
