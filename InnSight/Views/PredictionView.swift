@@ -5,6 +5,8 @@
 //  Tarjeta de predicción IA — muestra la tendencia histórica y el pronóstico
 //  adaptado al período seleccionado (semana / mes / año).
 //
+//  Modelo: regresión lineal ponderada + ajuste estacional por mes del año.
+//
 
 import SwiftUI
 import Charts
@@ -63,17 +65,17 @@ struct PredictionView: View {
 
     private var headerSubtitle: String {
         switch result.period {
-        case .week:  return "Regresión lineal · proyección semanal"
-        case .month: return "Regresión lineal · proyección mensual"
-        case .year:  return "Regresión lineal · proyección anual"
+        case .week:  return "Regresión estacional · proyección semanal"
+        case .month: return "Regresión estacional · proyección mensual"
+        case .year:  return "Regresión estacional · proyección anual"
         }
     }
 
-    // MARK: - Chart (siempre 12 meses históricos + 2 meses proyectados)
+    // MARK: - Chart (13 meses históricos + 2 meses proyectados)
 
     private var chartSection: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Reservaciones por mes · últimos 12 meses")
+            Text("Reservaciones por mes · últimos 13 meses")
                 .font(AppFonts.labelMedium)
                 .foregroundColor(AppColors.textSecondary)
                 .padding(.horizontal, 16)
@@ -126,7 +128,7 @@ struct PredictionView: View {
                 }
 
                 // ── Separador "Hoy" ─────────────────────────────────────────
-                RuleMark(x: .value("Hoy", 11.5))
+                RuleMark(x: .value("Hoy", 12.5))
                     .foregroundStyle(AppColors.divider)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     .annotation(position: .top, alignment: .center, spacing: 2) {
@@ -141,7 +143,7 @@ struct PredictionView: View {
                         AxisValueLabel {
                             Text(labelForIndex(idx))
                                 .font(AppFonts.overline)
-                                .foregroundColor(idx >= 12 ? AppColors.accent : AppColors.textSecondary)
+                                .foregroundColor(idx >= 13 ? AppColors.accent : AppColors.textSecondary)
                         }
                     }
                 }
@@ -178,14 +180,20 @@ struct PredictionView: View {
             }
 
             if result.period == .year {
-                // Modo Año → tarjeta única anual
                 annualCard(period: result.nextPeriod)
             } else {
-                // Modo Semana / Mes → dos tarjetas
-                HStack(spacing: 12) {
-                    periodCard(period: result.nextPeriod, isNext: true)
+                VStack(spacing: 10) {
+                    periodCard(
+                        period      : result.nextPeriod,
+                        seasonIndex : result.nextPeriodSeasonIndex,
+                        isNext      : true
+                    )
                     if let after = result.periodAfter {
-                        periodCard(period: after, isNext: false)
+                        periodCard(
+                            period      : after,
+                            seasonIndex : result.periodAfterSeasonIndex ?? 1.0,
+                            isNext      : false
+                        )
                     }
                 }
             }
@@ -202,59 +210,77 @@ struct PredictionView: View {
         }
     }
 
-    // Tarjeta para semana/mes
-    private func periodCard(period: PredictionPeriod, isNext: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 4) {
-                Image(systemName: "calendar")
-                    .font(.system(size: 10))
-                    .foregroundColor(AppColors.accent)
-                Text(period.label)
-                    .font(AppFonts.labelMedium)
-                    .foregroundColor(AppColors.accent)
-                    .fontWeight(.semibold)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                Spacer()
-                if isNext {
-                    Text("Próximo")
-                        .font(AppFonts.overline)
-                        .foregroundColor(AppColors.textTertiary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(AppColors.surfaceSecondary)
-                        .cornerRadius(4)
+    // Tarjeta para semana/mes — layout horizontal, una por renglón
+    private func periodCard(
+        period      : PredictionPeriod,
+        seasonIndex : Double,
+        isNext      : Bool
+    ) -> some View {
+        HStack(spacing: 16) {
+            // ── Columna izquierda: etiqueta + subtítulo + badges ─────────────
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.accent)
+                    Text(period.label)
+                        .font(AppFonts.titleMedium)
+                        .foregroundColor(AppColors.accent)
+                        .fontWeight(.bold)
+                    if isNext {
+                        Text("Próximo")
+                            .font(AppFonts.overline)
+                            .foregroundColor(AppColors.textTertiary)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(AppColors.background)
+                            .cornerRadius(4)
+                    }
+                }
+                Text(period.subtitle)
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.textTertiary)
+                // Badge estacional
+                Text(seasonalBadge(for: seasonIndex))
+                    .font(AppFonts.overline)
+                    .foregroundColor(seasonalBadgeColor(for: seasonIndex))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(seasonalBadgeColor(for: seasonIndex).opacity(0.12))
+                    .cornerRadius(6)
+            }
+
+            Spacer()
+
+            // ── Divisor ──────────────────────────────────────────────────────
+            Divider()
+                .frame(height: 52)
+                .background(AppColors.divider)
+
+            // ── Columna derecha: reservaciones + ingresos ────────────────────
+            VStack(alignment: .trailing, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 3) {
+                    Text("\(period.reservations)")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundColor(AppColors.textPrimary)
+                    Text("reserv.")
+                        .font(AppFonts.caption)
+                        .foregroundColor(AppColors.textSecondary)
+                }
+                HStack(spacing: 4) {
+                    Image(systemName: "dollarsign.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundColor(AppColors.success)
+                    Text(period.revenueFormatted)
+                        .font(AppFonts.labelMedium)
+                        .foregroundColor(AppColors.success)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
                 }
             }
-
-            Text(period.subtitle)
-                .font(AppFonts.caption)
-                .foregroundColor(AppColors.textTertiary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text("\(period.reservations)")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(AppColors.textPrimary)
-                Text("reserv.")
-                    .font(AppFonts.caption)
-                    .foregroundColor(AppColors.textSecondary)
-            }
-
-            HStack(spacing: 4) {
-                Image(systemName: "dollarsign.circle.fill")
-                    .font(.system(size: 11))
-                    .foregroundColor(AppColors.success)
-                Text(period.revenueFormatted)
-                    .font(AppFonts.labelMedium)
-                    .foregroundColor(AppColors.success)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
+        .padding(16)
+        .frame(maxWidth: .infinity)
         .background(AppColors.surfaceSecondary)
         .cornerRadius(12)
         .overlay(
@@ -325,6 +351,16 @@ struct PredictionView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
+
+            // Nota de ajuste estacional
+            HStack(spacing: 4) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.system(size: 10))
+                    .foregroundColor(AppColors.textTertiary)
+                Text("Proyección con ajuste estacional por mes")
+                    .font(AppFonts.overline)
+                    .foregroundColor(AppColors.textTertiary)
+            }
         }
         .padding(16)
         .background(AppColors.surfaceSecondary)
@@ -361,6 +397,18 @@ struct PredictionView: View {
                 Image(systemName: result.monthlySlope >= 0 ? "arrow.up.right" : "arrow.down.right")
                     .font(.system(size: 11))
                     .foregroundColor(result.monthlySlope >= 0 ? AppColors.success : AppColors.error)
+            }
+
+            Divider().frame(height: 14)
+
+            Label {
+                Text("Est. aplicada")
+                    .font(AppFonts.caption)
+                    .foregroundColor(AppColors.textSecondary)
+            } icon: {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.system(size: 11))
+                    .foregroundColor(AppColors.primary)
             }
 
             Spacer()
@@ -448,12 +496,25 @@ struct PredictionView: View {
         )
     }
 
-    private var xAxisValues: [Int] { [0, 2, 4, 6, 8, 10, 11, 12, 13] }
+    // xAxisValues: índices 0-12 son históricos (cada 2), 13-14 son predicciones
+    private var xAxisValues: [Int] { [0, 2, 4, 6, 8, 10, 12, 13, 14] }
 
     private func labelForIndex(_ index: Int) -> String {
         if let p = result.historicalPoints.first(where: { $0.index == index }) { return p.label }
         if let p = result.bridgeAndPredictionPoints.first(where: { $0.index == index }) { return p.label }
         return ""
+    }
+
+    private func seasonalBadge(for index: Double) -> String {
+        if index >= 1.15 { return "↑ T. alta" }
+        if index <= 0.85 { return "↓ T. baja" }
+        return "→ Normal"
+    }
+
+    private func seasonalBadgeColor(for index: Double) -> Color {
+        if index >= 1.15 { return AppColors.success }
+        if index <= 0.85 { return AppColors.warning }
+        return AppColors.textSecondary
     }
 }
 
@@ -490,37 +551,46 @@ struct PredictionInsufficientDataView: View {
     let calendar = Calendar.current
     let now      = Date()
 
-    let hist = (0..<12).map { i -> MonthlyPoint in
-        let d    = calendar.date(byAdding: .month, value: i - 11, to: now)!
+    // 13 puntos históricos (índices 0-12)
+    let hist = (0..<13).map { i -> MonthlyPoint in
+        let d    = calendar.date(byAdding: .month, value: i - 12, to: now)!
         let fmt  = DateFormatter()
         fmt.locale     = Locale(identifier: "es_MX")
         fmt.dateFormat = "MMM"
-        let counts = [7, 9, 8, 11, 9, 10, 11, 10, 12, 12, 13, 14]
+        let counts = [7, 9, 8, 11, 9, 10, 11, 10, 12, 12, 13, 14, 14]
         return MonthlyPoint(index: i, date: d, label: fmt.string(from: d).capitalized,
                             reservations: counts[i], revenue: Double(counts[i]) * 18000,
                             isPrediction: false)
     }
 
     let bridge = hist.last!
-    let pred1  = MonthlyPoint(index: 12, date: now, label: "Abr", reservations: 15,
-                              revenue: 270000, isPrediction: true)
-    let pred2  = MonthlyPoint(index: 13, date: now, label: "May", reservations: 16,
+    let pred1  = MonthlyPoint(index: 13, date: now, label: "May", reservations: 16,
                               revenue: 288000, isPrediction: true)
+    let pred2  = MonthlyPoint(index: 14, date: now, label: "Jun", reservations: 14,
+                              revenue: 252000, isPrediction: true)
+
+    let sampleSeasonalIndices: [Int: Double] = [
+        1: 1.05, 2: 1.02, 3: 1.08, 4: 1.11, 5: 1.12, 6: 0.98,
+        7: 1.36, 8: 1.02, 9: 0.69, 10: 0.67, 11: 0.74, 12: 1.17
+    ]
 
     let result = LinearRegressionResult(
         period                    : .month,
         historicalPoints          : hist,
         bridgeAndPredictionPoints : [bridge, pred1, pred2],
         nextPeriod : PredictionPeriod(
-            label: "Abr", subtitle: "Abril 2026", reservations: 15, revenueDecimal: 270000
-        ),
-        periodAfter: PredictionPeriod(
             label: "May", subtitle: "Mayo 2026", reservations: 16, revenueDecimal: 288000
         ),
-        reservationR2 : 0.82,
-        revenueR2     : 0.79,
-        monthlySlope  : 0.61,
-        dataMonthsUsed: 12
+        periodAfter: PredictionPeriod(
+            label: "Jun", subtitle: "Junio 2026", reservations: 14, revenueDecimal: 252000
+        ),
+        reservationR2         : 0.988,
+        revenueR2             : 0.971,
+        monthlySlope          : 0.52,
+        dataMonthsUsed        : 13,
+        seasonalIndices       : sampleSeasonalIndices,
+        nextPeriodSeasonIndex : 1.12,   // Mayo → T. normal (casi alta)
+        periodAfterSeasonIndex: 0.98    // Junio → Normal
     )
 
     ScrollView {
@@ -534,13 +604,16 @@ struct PredictionInsufficientDataView: View {
                 bridgeAndPredictionPoints : [bridge, pred1, pred2],
                 nextPeriod : PredictionPeriod(
                     label: "2027", subtitle: "proyección de año completo",
-                    reservations: 185, revenueDecimal: 3330000
+                    reservations: 195, revenueDecimal: 3510000
                 ),
-                periodAfter   : nil,
-                reservationR2 : 0.82,
-                revenueR2     : 0.79,
-                monthlySlope  : 0.61,
-                dataMonthsUsed: 12
+                periodAfter           : nil,
+                reservationR2         : 0.988,
+                revenueR2             : 0.971,
+                monthlySlope          : 0.52,
+                dataMonthsUsed        : 13,
+                seasonalIndices       : sampleSeasonalIndices,
+                nextPeriodSeasonIndex : 1.0,
+                periodAfterSeasonIndex: nil
             )
             PredictionView(result: yearResult)
         }
