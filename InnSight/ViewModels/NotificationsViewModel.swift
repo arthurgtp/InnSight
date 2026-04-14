@@ -65,12 +65,11 @@ class NotificationsViewModel: ObservableObject {
     }
     
     // MARK: - Mark All as Read
-    
+
     func markAllAsRead(for ownerId: UUID) async {
         do {
             try await notificationService.markAllAsRead(for: ownerId)
-            
-            // Update local state
+
             notifications = notifications.map { notification in
                 guard !notification.isRead else { return notification }
                 return AdminNotification(
@@ -88,6 +87,41 @@ class NotificationsViewModel: ObservableObject {
         } catch {
             errorMessage = "Error al marcar notificaciones: \(error.localizedDescription)"
             print("❌ Error marking all as read:", error)
+        }
+    }
+
+    // MARK: - Delete
+
+    func deleteNotification(_ notificationId: UUID) async {
+        do {
+            try await notificationService.deleteNotification(notificationId)
+            notifications.removeAll { $0.id == notificationId }
+            unreadCount = notifications.filter { !$0.isRead }.count
+        } catch {
+            errorMessage = "Error al eliminar la notificación: \(error.localizedDescription)"
+            print("❌ Error deleting notification:", error)
+        }
+    }
+
+    func deleteReadNotifications(for ownerId: UUID) async {
+        do {
+            try await notificationService.deleteReadNotifications(for: ownerId)
+            notifications.removeAll { $0.isRead }
+            // unreadCount stays the same (only read ones removed)
+        } catch {
+            errorMessage = "Error al eliminar notificaciones leídas: \(error.localizedDescription)"
+            print("❌ Error deleting read notifications:", error)
+        }
+    }
+
+    func deleteAllNotifications(for ownerId: UUID) async {
+        do {
+            try await notificationService.deleteAllNotifications(for: ownerId)
+            notifications.removeAll()
+            unreadCount = 0
+        } catch {
+            errorMessage = "Error al eliminar notificaciones: \(error.localizedDescription)"
+            print("❌ Error deleting all notifications:", error)
         }
     }
 }

@@ -123,13 +123,32 @@ class NotificationService {
     }
     
     // MARK: - Delete Notification
-    
-    /// Deletes a notification
+
+    /// Deletes a single notification
     func deleteNotification(_ notificationId: UUID) async throws {
         try await supabase
             .from("admin_notifications")
             .delete()
             .eq("notification_id", value: notificationId.uuidString)
+            .execute()
+    }
+
+    /// Deletes all notifications for an admin user
+    func deleteAllNotifications(for ownerId: UUID) async throws {
+        try await supabase
+            .from("admin_notifications")
+            .delete()
+            .eq("owner_id", value: ownerId.uuidString)
+            .execute()
+    }
+
+    /// Deletes only the read notifications for an admin user
+    func deleteReadNotifications(for ownerId: UUID) async throws {
+        try await supabase
+            .from("admin_notifications")
+            .delete()
+            .eq("owner_id", value: ownerId.uuidString)
+            .eq("is_read", value: true)
             .execute()
     }
 }
