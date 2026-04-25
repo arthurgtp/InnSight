@@ -13,7 +13,7 @@ struct RoomDetailView: View {
     @Binding var navigationPath: NavigationPath
     @Environment(\.dismiss) private var dismiss
     @State private var showReservationForm = false
-    @State private var showPanorama = false
+    @State private var selectedPanorama: RoomImage? = nil
     
     var body: some View {
         ZStack {
@@ -47,9 +47,9 @@ struct RoomDetailView: View {
                         // Header Info
                         headerSection
                         
-                        // 360° Button (if available)
+                        // 360° Section (if available)
                         if room.hasImage360 {
-                            panoramaButton
+                            panoramaSection
                         }
                         
                         Divider()
@@ -90,13 +90,11 @@ struct RoomDetailView: View {
         .sheet(isPresented: $showReservationForm) {
             ReservationFormView(room: room, hotel: hotel)
         }
-        .fullScreenCover(isPresented: $showPanorama) {
-            if let image360 = room.image360 {
-                PanoramaView(
-                    imageUrl: image360.url,
-                    roomName: "Habitación \(room.roomNumber)"
-                )
-            }
+        .fullScreenCover(item: $selectedPanorama) { panorama in
+            PanoramaView(
+                imageUrl: panorama.url,
+                roomName: panorama.caption ?? "Habitación \(room.roomNumber)"
+            )
         }
     }
     
@@ -177,54 +175,119 @@ struct RoomDetailView: View {
         }
     }
     
-    // MARK: - Panorama Button
-    private var panoramaButton: some View {
-        Button {
-            showPanorama = true
-        } label: {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [AppColors.primary, AppColors.secondary],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 50, height: 50)
-                    
-                    Image(systemName: "view.3d")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                }
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Vista 360°")
-                        .appTitleSmall()
-                        .foregroundColor(AppColors.textPrimary)
-                    Text("Explora la habitación en realidad virtual")
-                        .appBodySmall()
-                        .foregroundColor(AppColors.textSecondary)
-                }
-                
-                Spacer()
-                
-                Image(systemName: "chevron.right")
+    // MARK: - Panorama Section
+    private var panoramaSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Section header
+            HStack(spacing: 8) {
+                Image(systemName: "view.3d")
                     .font(.body)
-                    .foregroundColor(AppColors.textTertiary)
+                    .foregroundColor(AppColors.primary)
+                Text("Recorrido Virtual 360°")
+                    .appTitleSmall()
+                    .foregroundColor(AppColors.textPrimary)
+                Spacer()
+                Text("\(room.images360.count) vista\(room.images360.count == 1 ? "" : "s")")
+                    .appLabelSmall()
+                    .foregroundColor(AppColors.textSecondary)
             }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(AppColors.surfaceSecondary)
-                    .overlay(
+
+            if room.images360.count == 1, let single = room.images360.first {
+                // ── Single 360 image: original button style ──────────────
+                Button { selectedPanorama = single } label: {
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [AppColors.primary, AppColors.secondary],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+                                .frame(width: 50, height: 50)
+                            Image(systemName: "view.3d")
+                                .font(.title2)
+                                .foregroundColor(.white)
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(single.caption ?? "Vista 360°")
+                                .appTitleSmall()
+                                .foregroundColor(AppColors.textPrimary)
+                            Text("Explora la habitación en realidad virtual")
+                                .appBodySmall()
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.body)
+                            .foregroundColor(AppColors.textTertiary)
+                    }
+                    .padding(16)
+                    .background(
                         RoundedRectangle(cornerRadius: 16)
-                            .stroke(AppColors.primary.opacity(0.3), lineWidth: 1)
+                            .fill(AppColors.surfaceSecondary)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 16)
+                                    .stroke(AppColors.primary.opacity(0.3), lineWidth: 1)
+                            )
                     )
-            )
+                }
+                .buttonStyle(PlainButtonStyle())
+
+            } else {
+                // ── Multiple 360 images: horizontal card scroll ──────────
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(Array(room.images360.enumerated()), id: \.element.id) { index, panorama in
+                            Button { selectedPanorama = panorama } label: {
+                                VStack(spacing: 0) {
+                                    // Thumbnail placeholder with gradient
+                                    ZStack {
+                                        LinearGradient(
+                                            colors: [AppColors.primary, AppColors.secondary],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                        VStack(spacing: 6) {
+                                            Image(systemName: "view.3d")
+                                                .font(.system(size: 28))
+                                                .foregroundColor(.white)
+                                            Text("360°")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundColor(.white.opacity(0.9))
+                                        }
+                                    }
+                                    .frame(width: 130, height: 86)
+
+                                    // Label
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(panorama.caption ?? "Vista \(index + 1)")
+                                            .appLabelMedium()
+                                            .foregroundColor(AppColors.textPrimary)
+                                            .lineLimit(1)
+                                        Text("Toca para explorar")
+                                            .appLabelSmall()
+                                            .foregroundColor(AppColors.textSecondary)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 8)
+                                }
+                                .frame(width: 130)
+                                .background(AppColors.surfaceSecondary)
+                                .cornerRadius(14)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 14)
+                                        .stroke(AppColors.primary.opacity(0.25), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                }
+            }
         }
-        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Amenities Section

@@ -199,7 +199,8 @@ class AdminViewModel: ObservableObject {
     }
     
     // MARK: - Create Room
-    
+
+    /// Crea la habitación y devuelve su UUID generado por Supabase, o nil si falla.
     func createRoom(
         hotelId: UUID,
         roomNumber: String,
@@ -208,10 +209,10 @@ class AdminViewModel: ObservableObject {
         capacity: Int,
         description: String?,
         amenities: [String]
-    ) async -> Bool {
+    ) async -> UUID? {
         isLoading = true
         errorMessage = nil
-        
+
         do {
             struct NewRoom: Encodable {
                 let hotel_id: String
@@ -223,7 +224,10 @@ class AdminViewModel: ObservableObject {
                 let amenities: [String]
                 let is_active: Bool
             }
-            
+            struct CreatedRoom: Decodable {
+                let room_id: UUID
+            }
+
             let newRoom = NewRoom(
                 hotel_id: hotelId.uuidString,
                 room_number: roomNumber,
@@ -234,22 +238,24 @@ class AdminViewModel: ObservableObject {
                 amenities: amenities,
                 is_active: true
             )
-            
-            try await supabase
+
+            let created: [CreatedRoom] = try await supabase
                 .from("rooms")
                 .insert(newRoom)
+                .select("room_id")
                 .execute()
-            
+                .value
+
             print("✅ Habitación creada: \(roomNumber)")
             await fetchRooms(for: hotelId)
             isLoading = false
-            return true
-            
+            return created.first?.room_id
+
         } catch {
             errorMessage = "Error al crear habitación: \(error.localizedDescription)"
             print("❌ Error creating room:", error)
             isLoading = false
-            return false
+            return nil
         }
     }
     
