@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import Supabase
 
 @MainActor
 class AnalyticsViewModel: ObservableObject {
@@ -21,9 +22,14 @@ class AnalyticsViewModel: ObservableObject {
     /// Indica si el modelo de predicción está cargando de forma independiente.
     @Published var isPredictionLoading = false
 
+    /// Bundles de precios dinámicos calculados para los próximos ~75 días.
+    @Published var pricingBundles     : [PricingBundle] = []
+    @Published var isPricingLoading   : Bool            = false
+
     // MARK: - Private Properties
     private let analyticsService    = AnalyticsService()
     private let predictionService   = LinearRegressionService()
+    private let pricingService      = DynamicPricingService.shared
     
     // MARK: - Computed Properties
     var hasOccupancyData: Bool {
@@ -86,6 +92,69 @@ class AnalyticsViewModel: ObservableObject {
         await fetchPrediction(for: ownerId, hotelId: hotelId, period: period)
     }
 
+    // MARK: - Pricing Insights
+
+    /// Calcula los bundles de precios dinámicos para los hoteles/habitaciones del admin.
+    func fetchPricingBundles(hotels: [Hotel], hotelId: UUID?) async {
+        isPricingLoading = true
+        defer { isPricingLoading = false }
+
+        do {
+            // Determinar qué hoteles incluir
+            let targetHotels = hotelId.map { id in hotels.filter { $0.id == id } } ?? hotels
+            guard !targetHotels.isEmpty else { pricingBundles = []; return }
+
+            // Cargar habitaciones de cada hotel en paralelo
+            var roomsByHotel: [UUID: [Room]] = [:]
+            try await withThrowingTaskGroup(of: (UUID, [Room]).self) { group in
+                for hotel in targetHotels {
+                    group.addTask {
+                        let rooms: [Room] = try await supabase
+                            .from("rooms_with_images")
+                            .select()
+                            .eq("hotel_id", value: hotel.id.uuidString)
+                            .eq("is_active", value: true)
+                            .execute()
+                            .value
+                        return (hotel.id, rooms)
+                    }
+                }
+                for try await (hotelId, rooms) in group {
+                    roomsByHotel[hotelId] = rooms
+                }
+            }
+
+            // Calcular bundles
+            pricingBundles = pricingService.calculateBundles(
+                hotels      : targetHotels,
+                roomsByHotel: roomsByHotel,
+                regression  : predictionResult
+            )
+            print("✅ Pricing bundles: \(pricingBundles.count) generados")
+
+        } catch is CancellationError {
+            print("⚠️ Pricing fetch cancelled")
+        } catch {
+            print("⚠️ Pricing fetch error (non-critical): \(error)")
+            pricingBundles = []
+        }
+    }
+
+    /// Aplica un bundle de precios en Supabase y lo marca como aplicado.
+    func applyBundle(_ bundle: PricingBundle) async {
+        do {
+            try await pricingService.applyAdjustments(bundle.adjustments)
+            // Marcar como aplicado en la lista local
+            if let idx = pricingBundles.firstIndex(where: { $0.id == bundle.id }) {
+                pricingBundles[idx].isApplied = true
+                pricingBundles[idx].appliedAt = Date()
+            }
+            print("✅ Bundle '\(bundle.event.name)' aplicado a \(bundle.adjustments.count) cuartos")
+        } catch {
+            print("❌ Error aplicando bundle: \(error)")
+        }
+    }
+
     /// Calcula la regresión lineal adaptada al período seleccionado.
     func fetchPrediction(for ownerId: UUID, hotelId: UUID?, period: AnalyticsPeriod) async {
         isPredictionLoading = true
@@ -110,11 +179,12 @@ class AnalyticsViewModel: ObservableObject {
     }
     
     // MARK: - Reset
-    
+
     func reset() {
-        occupancyData   = []
-        revenueData     = []
+        occupancyData    = []
+        revenueData      = []
         predictionResult = nil
-        errorMessage    = nil
+        pricingBundles   = []
+        errorMessage     = nil
     }
 }
