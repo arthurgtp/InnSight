@@ -62,26 +62,46 @@ class ReservationViewModel: ObservableObject {
     @Published var checkOutDate: Date = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
     @Published var guestCount: Int = 1
     @Published var specialRequests: String = ""
-    
+
+    // MARK: - Dynamic Pricing
+    @Published var dynamicPriceInfo: DynamicPriceInfo?
+
     // MARK: - UI State
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var createdReservation: Reservation?
-    
+
     // MARK: - Availability State
     @Published var bookedRanges: [BookedDateRange] = []
     @Published var isLoadingAvailability = false
-    
+
     // MARK: - Validation State
     @Published var dateError: String?
     @Published var guestError: String?
-    
+
     // MARK: - Dependencies
     private let room: Room
-    
+    private let pricingService = DynamicPricingService.shared
+
     // MARK: - Init
     init(room: Room) {
         self.room = room
+        // Calcular precio inicial con las fechas por defecto
+        self.dynamicPriceInfo = DynamicPricingService.shared.effectivePriceInfo(
+            basePrice: room.price,
+            checkIn:   Date(),
+            checkOut:  Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+        )
+    }
+
+    // MARK: - Recalculate Dynamic Price
+
+    func recalculateDynamicPrice() {
+        dynamicPriceInfo = pricingService.effectivePriceInfo(
+            basePrice : room.price,
+            checkIn   : checkInDate,
+            checkOut  : checkOutDate
+        )
     }
     
     // MARK: - Fetch Booked Dates
@@ -229,9 +249,9 @@ class ReservationViewModel: ObservableObject {
     }
     
     var totalPrice: Decimal {
-        room.price * Decimal(numberOfNights)
+        dynamicPriceInfo?.totalPrice ?? (room.price * Decimal(numberOfNights))
     }
-    
+
     var totalPriceFormatted: String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .currency

@@ -125,6 +125,37 @@ struct PriceAdjustment: Identifiable {
     var suggestedPriceFormatted: String { suggestedPrice.toCurrency() }
 }
 
+// MARK: - Dynamic Price Info (para vista del cliente al reservar)
+
+struct DynamicPriceInfo {
+    /// Precio base sin ajuste (el que tiene la habitación en BD)
+    let baseNightlyPrice  : Decimal
+    /// Precio ajustado por noche (puede ser igual si no hay evento)
+    let adjustedNightlyPrice: Decimal
+    /// Total por todas las noches con el precio ajustado
+    let totalPrice        : Decimal
+    /// Multiplicador efectivo promedio del período (1.0 = sin cambio)
+    let multiplier        : Double
+    /// Evento principal que justifica el ajuste (nil = precio normal)
+    let event             : CalendarEvent?
+    /// Número de noches de la estancia
+    let nights            : Int
+
+    var isAdjusted      : Bool   { abs(multiplier - 1.0) > 0.01 }
+    var percentChange   : Int    { Int(((multiplier - 1.0) * 100).rounded()) }
+    var isIncrease      : Bool   { multiplier > 1.0 }
+
+    var basePriceFormatted    : String { baseNightlyPrice.toCurrency() }
+    var adjustedPriceFormatted: String { adjustedNightlyPrice.toCurrency() }
+    var totalPriceFormatted   : String { totalPrice.toCurrency() }
+
+    var adjustmentLabel: String {
+        guard isAdjusted else { return "" }
+        let sign = isIncrease ? "+" : ""
+        return "\(sign)\(percentChange)%"
+    }
+}
+
 // MARK: - Pricing Bundle (event + all room adjustments)
 
 struct PricingBundle: Identifiable {

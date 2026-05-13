@@ -81,6 +81,67 @@ final class DynamicPricingService {
         return bundles.sorted { $0.event.startDate < $1.event.startDate }
     }
 
+    // MARK: - Client-facing: precio efectivo para una estancia concreta
+
+    /// Calcula el precio dinámico para una estancia (check-in → check-out).
+    /// Evalúa cada noche por separado, aplica el multiplicador del evento más
+    /// relevante de esa noche, y devuelve un `DynamicPriceInfo` con el resumen.
+    func effectivePriceInfo(
+        basePrice    : Decimal,
+        checkIn      : Date,
+        checkOut     : Date,
+        regression   : LinearRegressionResult? = nil
+    ) -> DynamicPriceInfo {
+
+        let cal    = Calendar.current
+        let nights = max(1, cal.dateComponents([.day], from: checkIn.startOfDay,
+                                               to: checkOut.startOfDay).day ?? 1)
+
+        // Eventos que cubren el período completo de la estancia
+        let events = calendar.upcomingEvents(from: checkIn, days: nights + 1)
+        let significant = deduplicateEvents(events)
+
+        // Calcular multiplicador por noche
+        var nightlyMultipliers: [Double] = []
+        var dominantEvent: CalendarEvent?
+        var dominantMultiplier: Double = 1.0
+
+        for offset in 0..<nights {
+            let night = cal.date(byAdding: .day, value: offset, to: checkIn)!
+            // Buscar el evento de mayor prioridad que cubre esta noche
+            let eventsForNight = significant.filter { ev in
+                ev.startDate.startOfDay <= night.startOfDay &&
+                ev.endDate.startOfDay   >= night.startOfDay
+            }
+            let bestEvent  = eventsForNight.max { $0.demandMultiplier < $1.demandMultiplier }
+            let seasonBonus = seasonalFactor(for: night, regression: regression)
+            let mult       = bestEvent.map { min(1.60, max(0.70, $0.demandMultiplier * seasonBonus)) } ?? 1.0
+            nightlyMultipliers.append(mult)
+
+            if mult > dominantMultiplier {
+                dominantMultiplier = mult
+                dominantEvent      = bestEvent
+            }
+        }
+
+        // Multiplicador promedio del período
+        let avgMultiplier = nightlyMultipliers.reduce(0, +) / Double(nights)
+
+        // Precio ajustado por noche (redondeado a múltiplo de 50)
+        let basePriceDouble     = NSDecimalNumber(decimal: basePrice).doubleValue
+        let adjustedNightly     = Decimal(roundToNearest50(basePriceDouble * avgMultiplier))
+        let total               = adjustedNightly * Decimal(nights)
+
+        return DynamicPriceInfo(
+            baseNightlyPrice    : basePrice,
+            adjustedNightlyPrice: adjustedNightly,
+            totalPrice          : total,
+            multiplier          : avgMultiplier,
+            event               : dominantEvent,
+            nights              : nights
+        )
+    }
+
     // MARK: - Apply adjustment in Supabase
 
     /// Actualiza el precio de un array de habitaciones en Supabase.
