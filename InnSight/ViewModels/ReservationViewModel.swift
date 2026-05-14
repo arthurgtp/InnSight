@@ -10,33 +10,45 @@ import Supabase
 import Combine
 
 /// Represents a booked date range for a room
-struct BookedDateRange: Codable {
+struct BookedDateRange: Codable, Equatable {
     let startDate: Date
     let endDate: Date
-    
+
     enum CodingKeys: String, CodingKey {
         case startDate = "start_date"
         case endDate = "end_date"
     }
-    
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let startStr = try container.decode(String.self, forKey: .startDate)
         let endStr = try container.decode(String.self, forKey: .endDate)
-        
+
+        self.startDate = try BookedDateRange.parseDate(startStr, codingKey: .startDate)
+        self.endDate   = try BookedDateRange.parseDate(endStr,   codingKey: .endDate)
+    }
+
+    /// Parses either "yyyy-MM-dd" (PostgreSQL date) or any ISO-8601 timestamp
+    /// (PostgreSQL timestamptz) into a midnight-local Date.
+    private static func parseDate(_ raw: String, codingKey: CodingKeys) throws -> Date {
+        // Slice to first 10 chars so both "2026-05-02" and "2026-05-02T06:00:00Z"
+        // become "2026-05-02". Then parse with the DEVICE'S local timezone —
+        // NOT UTC — so "2026-05-02" means midnight May 2 locally, not midnight UTC
+        // (which would shift the date by the UTC offset and break comparisons).
+        let dateOnly = String(raw.prefix(10))
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        
-        guard let start = formatter.date(from: startStr),
-              let end = formatter.date(from: endStr) else {
-            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid date format"))
+        formatter.locale     = Locale(identifier: "en_US_POSIX")
+        // ⚠️  No explicit timeZone → uses system/local timezone. This is intentional.
+        if let d = formatter.date(from: dateOnly) {
+            return d  // already midnight local; no startOfDay conversion needed
         }
-        
-        self.startDate = start
-        self.endDate = end
+        throw DecodingError.dataCorrupted(
+            .init(codingPath: [codingKey],
+                  debugDescription: "Cannot parse date string: '\(raw)'")
+        )
     }
-    
+
     init(startDate: Date, endDate: Date) {
         self.startDate = startDate
         self.endDate = endDate
@@ -106,31 +118,31 @@ class ReservationViewModel: ObservableObject {
     
     // MARK: - Fetch Booked Dates
     
-    /// Fetch all booked date ranges for this room
+    /// Fetch all booked date ranges for this room.
+    /// Uses a SECURITY DEFINER RPC function so any authenticated user can
+    /// check availability regardless of RLS policies on the reservations table.
     func fetchBookedDates() async {
         isLoadingAvailability = true
-        
+
         do {
             let ranges: [BookedDateRange] = try await supabase
-                .from("reservations")
-                .select("start_date, end_date")
-                .eq("room_id", value: room.id.uuidString)
-                .not("status", operator: .in, value: "(cancelled,no_show)")
-                .gte("end_date", value: Date().startOfDay.ISO8601Format(.iso8601Date(timeZone: .current)))
+                .rpc("get_room_booked_dates", params: ["p_room_id": room.id.uuidString])
                 .execute()
                 .value
-            
+
             bookedRanges = ranges
             print("📅 Fechas reservadas cargadas: \(ranges.count) rangos")
-            
-            // After loading booked dates, adjust default dates to available ones
+
+            // Always advance to the nearest actually-available date pair.
+            // The calendar button is disabled while this fetch runs, so the
+            // user cannot have selected dates yet — safe to overwrite.
             adjustDatesToAvailable()
-            
+
         } catch {
             print("❌ Error fetching booked dates:", error.localizedDescription)
             bookedRanges = []
         }
-        
+
         isLoadingAvailability = false
     }
     

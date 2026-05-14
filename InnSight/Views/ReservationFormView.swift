@@ -152,34 +152,46 @@ struct ReservationFormView: View {
                 .foregroundColor(AppColors.textPrimary)
             
             // Single button to open calendar
+            // Disabled while booked-dates are still loading to avoid showing
+            // an empty calendar that lets the user pick unavailable dates.
             Button {
                 showCalendar = true
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "calendar")
-                        .foregroundColor(AppColors.primary)
-                        .font(.title2)
-                    
+                    if viewModel.isLoadingAvailability {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .frame(width: 28, height: 28)
+                    } else {
+                        Image(systemName: "calendar")
+                            .foregroundColor(AppColors.primary)
+                            .font(.title2)
+                    }
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(viewModel.checkInDate.formattedShort()) - \(viewModel.checkOutDate.formattedShort())")
                             .appTitleMedium()
-                            .foregroundColor(AppColors.textPrimary)
-                        
-                        Text("\(viewModel.numberOfNights) \(viewModel.numberOfNights == 1 ? "noche" : "noches")")
+                            .foregroundColor(viewModel.isLoadingAvailability ? AppColors.textTertiary : AppColors.textPrimary)
+
+                        Text(viewModel.isLoadingAvailability
+                             ? "Cargando disponibilidad..."
+                             : "\(viewModel.numberOfNights) \(viewModel.numberOfNights == 1 ? "noche" : "noches")")
                             .appBodySmall()
                             .foregroundColor(AppColors.textSecondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .foregroundColor(AppColors.textTertiary)
                 }
                 .padding(16)
                 .background(AppColors.inputBackground)
                 .cornerRadius(12)
+                .opacity(viewModel.isLoadingAvailability ? 0.6 : 1.0)
             }
             .buttonStyle(.plain)
+            .disabled(viewModel.isLoadingAvailability)
             
             // Warning if dates overlap with booked dates
             if viewModel.hasOverlappingBooking() {
