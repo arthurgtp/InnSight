@@ -152,34 +152,46 @@ struct ReservationFormView: View {
                 .foregroundColor(AppColors.textPrimary)
             
             // Single button to open calendar
+            // Disabled while booked-dates are still loading to avoid showing
+            // an empty calendar that lets the user pick unavailable dates.
             Button {
                 showCalendar = true
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: "calendar")
-                        .foregroundColor(AppColors.primary)
-                        .font(.title2)
-                    
+                    if viewModel.isLoadingAvailability {
+                        ProgressView()
+                            .scaleEffect(0.8)
+                            .frame(width: 28, height: 28)
+                    } else {
+                        Image(systemName: "calendar")
+                            .foregroundColor(AppColors.primary)
+                            .font(.title2)
+                    }
+
                     VStack(alignment: .leading, spacing: 4) {
                         Text("\(viewModel.checkInDate.formattedShort()) - \(viewModel.checkOutDate.formattedShort())")
                             .appTitleMedium()
-                            .foregroundColor(AppColors.textPrimary)
-                        
-                        Text("\(viewModel.numberOfNights) \(viewModel.numberOfNights == 1 ? "noche" : "noches")")
+                            .foregroundColor(viewModel.isLoadingAvailability ? AppColors.textTertiary : AppColors.textPrimary)
+
+                        Text(viewModel.isLoadingAvailability
+                             ? "Cargando disponibilidad..."
+                             : "\(viewModel.numberOfNights) \(viewModel.numberOfNights == 1 ? "noche" : "noches")")
                             .appBodySmall()
                             .foregroundColor(AppColors.textSecondary)
                     }
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .foregroundColor(AppColors.textTertiary)
                 }
                 .padding(16)
                 .background(AppColors.inputBackground)
                 .cornerRadius(12)
+                .opacity(viewModel.isLoadingAvailability ? 0.6 : 1.0)
             }
             .buttonStyle(.plain)
+            .disabled(viewModel.isLoadingAvailability)
             
             // Warning if dates overlap with booked dates
             if viewModel.hasOverlappingBooking() {
@@ -224,11 +236,13 @@ struct ReservationFormView: View {
         .onChange(of: viewModel.checkInDate) { _, _ in
             Task { @MainActor in
                 _ = viewModel.validateDates()
+                viewModel.recalculateDynamicPrice()
             }
         }
         .onChange(of: viewModel.checkOutDate) { _, _ in
             Task { @MainActor in
                 _ = viewModel.validateDates()
+                viewModel.recalculateDynamicPrice()
             }
         }
     }
@@ -341,24 +355,78 @@ struct ReservationFormView: View {
                     .foregroundColor(AppColors.textPrimary)
                 Spacer()
             }
-            
-            Divider()
-                .background(AppColors.divider)
-            
-            // Price per night
-            HStack {
-                Text("\(room.priceFormatted) × \(viewModel.numberOfNights) \(viewModel.numberOfNights == 1 ? "noche" : "noches")")
-                    .appBodyMedium()
-                    .foregroundColor(AppColors.textSecondary)
-                Spacer()
-                Text(viewModel.totalPriceFormatted)
-                    .appBodyMedium()
-                    .foregroundColor(AppColors.textSecondary)
+
+            Divider().background(AppColors.divider)
+
+            if let info = viewModel.dynamicPriceInfo, info.isAdjusted {
+                // ── Precio ajustado por evento ──────────────────────────────
+
+                // Banner del evento
+                if let event = info.event {
+                    HStack(spacing: 8) {
+                        Image(systemName: event.type.icon)
+                            .font(.system(size: 13))
+                            .foregroundColor(event.type.color)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(event.name)
+                                .font(AppFonts.labelSmall)
+                                .foregroundColor(AppColors.textPrimary)
+                            Text(event.description.isEmpty ? event.type.rawValue : event.description)
+                                .font(AppFonts.caption)
+                                .foregroundColor(AppColors.textSecondary)
+                        }
+                        Spacer()
+                        Text(info.adjustmentLabel)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(info.isIncrease ? AppColors.error : AppColors.success)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background((info.isIncrease ? AppColors.error : AppColors.success).opacity(0.10))
+                            .cornerRadius(8)
+                    }
+                    .padding(10)
+                    .background(event.type.color.opacity(0.07))
+                    .cornerRadius(10)
+                }
+
+                // Precio base
+                HStack {
+                    Text("Precio base por noche")
+                        .appBodyMedium()
+                        .foregroundColor(AppColors.textTertiary)
+                    Spacer()
+                    Text(info.basePriceFormatted)
+                        .appBodyMedium()
+                        .foregroundColor(AppColors.textTertiary)
+                        .strikethrough(true, color: AppColors.textTertiary)
+                }
+
+                // Precio ajustado × noches
+                HStack {
+                    Text("\(info.adjustedPriceFormatted) × \(viewModel.numberOfNights) \(viewModel.numberOfNights == 1 ? "noche" : "noches")")
+                        .appBodyMedium()
+                        .foregroundColor(AppColors.textSecondary)
+                    Spacer()
+                    Text(info.totalPriceFormatted)
+                        .appBodyMedium()
+                        .foregroundColor(AppColors.textSecondary)
+                }
+
+            } else {
+                // ── Precio normal ───────────────────────────────────────────
+                HStack {
+                    Text("\(room.priceFormatted) × \(viewModel.numberOfNights) \(viewModel.numberOfNights == 1 ? "noche" : "noches")")
+                        .appBodyMedium()
+                        .foregroundColor(AppColors.textSecondary)
+                    Spacer()
+                    Text(viewModel.totalPriceFormatted)
+                        .appBodyMedium()
+                        .foregroundColor(AppColors.textSecondary)
+                }
             }
-            
-            Divider()
-                .background(AppColors.divider)
-            
+
+            Divider().background(AppColors.divider)
+
             // Total
             HStack {
                 Text("Total")

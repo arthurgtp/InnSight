@@ -52,7 +52,7 @@ struct AnalyticsView: View {
     }
     
     // MARK: - Load Analytics
-    
+
     private func loadAnalytics() async {
         do {
             let session = try await supabase.auth.session
@@ -61,6 +61,8 @@ struct AnalyticsView: View {
                 period: selectedPeriod,
                 hotelId: selectedHotel?.id
             )
+            // Precios dinámicos se calculan después de que la predicción ML esté lista
+            await viewModel.fetchPricingBundles(hotels: hotels, hotelId: selectedHotel?.id)
         } catch {
             print("❌ Error getting session for analytics: \(error)")
         }
@@ -175,6 +177,9 @@ struct AnalyticsView: View {
 
             // ── Predicción IA ────────────────────────────────────────────
             predictionSection
+
+            // ── Precios Dinámicos ─────────────────────────────────────────
+            pricingSection
         }
     }
 
@@ -203,6 +208,17 @@ struct AnalyticsView: View {
         } else {
             PredictionInsufficientDataView()
         }
+    }
+
+    // MARK: - Pricing Section
+
+    @ViewBuilder
+    private var pricingSection: some View {
+        PricingInsightsView(
+            bundles:   viewModel.pricingBundles,
+            isLoading: viewModel.isPricingLoading,
+            onApply:   { bundle in await viewModel.applyBundle(bundle) }
+        )
     }
     
     // MARK: - Summary Card

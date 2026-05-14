@@ -15,6 +15,9 @@ struct RoomDetailView: View {
     @State private var showReservationForm = false
     @State private var selectedPanorama: RoomImage? = nil
     
+    @State private var selectedDate = Date()
+    let pricingService = DynamicPricingService.shared
+    
     var body: some View {
         ZStack {
             AppColors.background
@@ -98,6 +101,30 @@ struct RoomDetailView: View {
         }
     }
     
+    // MARK: - Price Adjustment Calculation via Bundles
+    private func priceAdjustmentForSelectedDate() -> (event: String?, basePrice: Decimal, suggestedPrice: Decimal) {
+        // Call calculateBundles with correct parameters
+        let bundles = pricingService.calculateBundles(
+            hotels: [hotel],
+            roomsByHotel: [hotel.id: [room]],
+            regression: nil,
+            daysAhead: 1
+        )
+        // Find bundle where event covers selectedDate (startDate <= selectedDate <= endDate)
+        guard let bundle = bundles.first(where: { bundle in
+            let event = bundle.event
+            return event.startDate <= selectedDate && selectedDate <= event.endDate
+        }) else {
+            return (nil, room.price, room.price)
+        }
+        // Find room adjustment in bundle using adjustments
+        if let roomAdjustment = bundle.adjustments.first(where: { $0.roomId == room.id }) {
+            return (bundle.event.name, room.price, roomAdjustment.suggestedPrice)
+        } else {
+            return (bundle.event.name, room.price, room.price)
+        }
+    }
+    
     // MARK: - Header Section
     private var headerSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -125,13 +152,50 @@ struct RoomDetailView: View {
                     .foregroundColor(AppColors.textSecondary)
             }
             
-            // Price and Capacity Row
+            // Date Picker for reservation date
+            DatePicker(
+                "Fecha de reserva",
+                selection: $selectedDate,
+                in: Date()...,
+                displayedComponents: [.date]
+            )
+            .datePickerStyle(.compact)
+            .labelsHidden()
+            .padding(.vertical, 4)
+            
+            // Price and Capacity Row with price adjustment
             HStack {
-                // Price
+                
+                // Price with dynamic adjustment
+                let priceAdjustment = priceAdjustmentForSelectedDate()
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(room.priceFormatted)
-                        .appHeadlineSmall()
-                        .foregroundColor(AppColors.primary)
+                    if let eventName = priceAdjustment.event {
+                        // Show event label and adjusted price with base price struck through
+                        HStack(spacing: 6) {
+                            Text(eventName)
+                                .appLabelSmall()
+                                .foregroundColor(AppColors.info)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(AppColors.surfaceSecondary)
+                                .cornerRadius(8)
+                            
+                            Text(priceAdjustment.suggestedPrice.toCurrency())
+                                .appHeadlineSmall()
+                                .foregroundColor(AppColors.info)
+                            
+                            Text(priceAdjustment.basePrice.toCurrency())
+                                .appBodySmall()
+                                .foregroundColor(AppColors.textSecondary)
+                                .strikethrough(true, color: AppColors.textSecondary)
+                        }
+                    } else {
+                        // No event, just show base price
+                        Text(priceAdjustment.basePrice.toCurrency())
+                            .appHeadlineSmall()
+                            .foregroundColor(AppColors.primary)
+                    }
+                    
                     Text("por noche")
                         .appBodySmall()
                         .foregroundColor(AppColors.textSecondary)
@@ -343,7 +407,7 @@ struct RoomDetailView: View {
                     Text("Precio total")
                         .appBodySmall()
                         .foregroundColor(AppColors.textSecondary)
-                    Text(room.priceFormatted)
+                    Text(room.price.toCurrency())
                         .appTitleLarge()
                         .foregroundColor(AppColors.textPrimary)
                 }
@@ -402,3 +466,4 @@ struct RoomDetailView: View {
         navigationPath: $path
     )
 }
+

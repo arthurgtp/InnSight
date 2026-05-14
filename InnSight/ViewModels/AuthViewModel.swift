@@ -111,19 +111,44 @@ class AuthViewModel: ObservableObject {
     }
     
     func signUp(email: String, password: String, fullName: String) async throws {
-        
-        // 1️⃣ Crear usuario en auth
+
+        // 1️⃣ Crear usuario en Supabase Auth
         let response = try await supabase.auth.signUp(
             email: email,
             password: password,
-            data: [
-                "full_name": .string(fullName)
-            ]
+            data: ["full_name": .string(fullName)]
         )
-        
-        // En la API actual de Supabase Swift, `response.user` es no opcional
+
         let user = response.user
         print("✅ Usuario creado:", user.id)
+
+        // 2️⃣ Insertar perfil manualmente como respaldo
+        //    (por si el trigger handle_new_user no está activo en el proyecto)
+        do {
+            struct NewProfile: Encodable {
+                let user_id: String
+                let full_name: String
+                let email: String
+                let role: String
+            }
+            try await supabase
+                .from("profiles")
+                .insert(NewProfile(
+                    user_id: user.id.uuidString,
+                    full_name: fullName,
+                    email: email,
+                    role: "client"
+                ))
+                .execute()
+            print("✅ Perfil creado manualmente")
+        } catch {
+            // Si el trigger ya lo creó, el upsert falla con conflict → no es error
+            print("ℹ️ Perfil ya existía (trigger lo creó): \(error.localizedDescription)")
+        }
+
+        // 3️⃣ Marcar sesión activa y cargar perfil
+        isLoggedIn = true
+        await fetchProfile()
     }
     
     /// Cierra la sesión actual en Supabase y limpia el estado local
