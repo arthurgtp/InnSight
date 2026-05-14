@@ -66,6 +66,12 @@ struct AvailabilityCalendarView: View {
         .onAppear {
             initializeAvailableDates()
         }
+        // If booked ranges arrive while the calendar is already open (race
+        // condition where the async fetch completes after the sheet was
+        // presented), re-initialize so blocked dates are enforced immediately.
+        .onChange(of: bookedRanges) { _, _ in
+            initializeAvailableDates()
+        }
     }
     
     // MARK: - Initialize with available dates

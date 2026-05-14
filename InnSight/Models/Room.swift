@@ -56,11 +56,15 @@ struct Room: Identifiable, Codable, Hashable {
     }
     
     var image360: RoomImage? {
-        images.first(where: { $0.is360 })
+        images360.first
     }
-    
+
+    var images360: [RoomImage] {
+        images.filter { $0.is360 }.sorted { $0.order < $1.order }
+    }
+
     var hasImage360: Bool {
-        image360 != nil
+        !images360.isEmpty
     }
 }
 
@@ -94,7 +98,7 @@ enum RoomType: String, Codable, CaseIterable {
 }
 
 // MARK: - Room Image
-struct RoomImage: Identifiable, Codable {
+struct RoomImage: Identifiable, Codable, Hashable {
     let id: UUID
     let roomId: UUID
     let url: String

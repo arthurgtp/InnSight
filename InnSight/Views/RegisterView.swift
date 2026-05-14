@@ -324,13 +324,18 @@ struct RegisterView: View {
                     password: password,
                     fullName: fullName
                 )
-                
+                // isLoggedIn = true ya fue seteado dentro de signUp,
+                // el ContentView detecta el cambio y navega automáticamente.
                 print("🎉 Registro completo")
-                dismiss()
-                
+
             } catch {
                 print("❌ Error en registro:", error.localizedDescription)
-                errorMessage = error.localizedDescription
+                // Mensaje más amigable para el error de trigger de BD
+                if error.localizedDescription.contains("Database error") {
+                    errorMessage = "Error al crear el perfil. Intenta de nuevo o contacta soporte."
+                } else {
+                    errorMessage = error.localizedDescription
+                }
             }
             
             isLoading = false
